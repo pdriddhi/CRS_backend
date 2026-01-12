@@ -1,0 +1,14 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "crs-backend-dev"
+resolve_s3 = true
+s3_prefix = "crs-backend-dev"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+disable_rollback = true
+parameter_overrides = "Environment=\"dev\""
+image_repositories = []
+
+[default.global.parameters]
+region = "ap-south-1"
