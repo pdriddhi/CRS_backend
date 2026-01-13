@@ -32,7 +32,7 @@ def lambda_handler(event, context):
                 "body": json.dumps({"message": "Mobile number must be exactly 10 digits"})
             }
 
-        phone_e164 = f"+{phone}"
+        phone_e164 = f"+91{phone}"
             
         response = table.query(
             IndexName="GSI_PHONE",
@@ -42,7 +42,7 @@ def lambda_handler(event, context):
         if response["Items"]:
             user = response["Items"][0]
             return {
-                "statusCode": 200,
+                "statusCode": 409,
                 "body": json.dumps({
                     "message": "User already registered",
                     "user_id": user["user_id"],
@@ -50,33 +50,38 @@ def lambda_handler(event, context):
                 })
             }
 
+        user_id = str(uuid.uuid4())
+        
         try:
-            cognito.sign_up(
+            cognito_response = cognito.sign_up(
                 ClientId=CLIENT_ID,
                 Username=phone_e164,
                 Password=password,
                 UserAttributes=[
                     {"Name": "phone_number", "Value": phone_e164},
-                    {"Name": "name", "Value": user_name},
-                    {"Name": "custom:role", "Value": "CUSTOMER"}
+                    {"Name": "name", "Value": user_name}
                 ]
             )
-        except cognito.exceptions.InvalidParameterException as e:
-            # If custom:role is not defined, try without it
-            if "custom:role" in str(e):
-                cognito.sign_up(
-                    ClientId=CLIENT_ID,
-                    Username=phone_e164,
-                    Password=password,
-                    UserAttributes=[
-                        {"Name": "phone_number", "Value": phone_e164},
-                        {"Name": "name", "Value": user_name}
-                    ]
-                )
-            else:
-                raise e
 
-        user_id = str(uuid.uuid4())
+            cognito.admin_confirm_sign_up(
+                UserPoolId=os.environ["USER_POOL_ID"],
+                Username=phone_e164
+            )        
+
+            cognito.admin_update_user_attributes(
+                UserPoolId=os.environ["USER_POOL_ID"],
+                Username=phone_e164,
+                UserAttributes=[
+                    {"Name": "phone_number_verified", "Value": "true"}
+                ]
+            )
+
+
+        except cognito.exceptions.UsernameExistsException:
+            return {
+                "statusCode": 409,
+                "body": json.dumps({"message": "Phone number already registered"})
+            }
 
         table.put_item(
             Item={
